@@ -1,0 +1,102 @@
+# TripFlow como iria para a VM: API, worker, relay da outbox, consumidor,
+# MySQL, Redis e RabbitMQ. Diferenças em relação ao docker-compose.yml do
+# repositório do TripFlow:
+#   - nenhuma porta publicada além da API (MySQL, Redis e RabbitMQ ficam na rede interna);
+#   - RabbitMQ sem o plugin de management (o painel não vai para produção);
+#   - todos os contêineres no mesmo cgroup pai (CGROUP_PARENT), que impõe o teto
+#     da VM Oracle A1: 2 CPUs e 12 GB somados. Ver capacity/scripts/setup-cgroup.sh.
+#
+# Variáveis: TRIPFLOW_SRC (checkout do TripFlow), CGROUP_PARENT, APP_KEY.
+
+name: capacity
+
+x-app: &app
+  image: tripflow:capacity
+  build: ${TRIPFLOW_SRC:?defina TRIPFLOW_SRC}
+  cgroup_parent: ${CGROUP_PARENT:?defina CGROUP_PARENT}
+  environment: &app-env
+    APP_NAME: TripFlow
+    APP_ENV: production
+    APP_DEBUG: "false"
+    APP_KEY: ${APP_KEY:?defina APP_KEY}
+    APP_URL: http://localhost:8000
+    LOG_CHANNEL: json
+    LOG_LEVEL: warning
+    DB_CONNECTION: mysql
+    DB_HOST: mysql
+    DB_PORT: "3306"
+    DB_DATABASE: tripflow
+    DB_USERNAME: tripflow
+    DB_PASSWORD: secret
+    SESSION_DRIVER: array
+    QUEUE_CONNECTION: redis
+    CACHE_STORE: redis
+    REDIS_CLIENT: phpredis
+    REDIS_HOST: redis
+    MESSAGING_DRIVER: rabbitmq
+    RABBITMQ_HOST: rabbitmq
+    RABBITMQ_EXCHANGE: tripflow.events
+  depends_on:
+    mysql: { condition: service_healthy }
+    redis: { condition: service_healthy }
+    rabbitmq: { condition: service_healthy }
+  restart: unless-stopped
+
+services:
+  api:
+    <<: *app
+    ports: ["127.0.0.1:8000:8000"]
+    volumes: ["./seed.php:/capacity/seed.php:ro"]
+
+  worker:
+    <<: *app
+    command: ["php", "artisan", "queue:work", "redis", "--tries=3", "--backoff=5"]
+    healthcheck: { disable: true }
+
+  outbox-relay:
+    <<: *app
+    command: ["php", "artisan", "outbox:relay"]
+    healthcheck: { disable: true }
+
+  consumer:
+    <<: *app
+    command: ["php", "artisan", "events:consume"]
+    healthcheck: { disable: true }
+
+  mysql:
+    image: mysql:8.4
+    cgroup_parent: ${CGROUP_PARENT}
+    environment:
+      MYSQL_DATABASE: tripflow
+      MYSQL_USER: tripflow
+      MYSQL_PASSWORD: secret
+      MYSQL_ROOT_PASSWORD: root
+    volumes: [tripflow-mysql:/var/lib/mysql]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-psecret", "-utripflow"]
+      interval: 5s
+      retries: 30
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    cgroup_parent: ${CGROUP_PARENT}
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:4-alpine
+    cgroup_parent: ${CGROUP_PARENT}
+    volumes: [tripflow-rabbitmq:/var/lib/rabbitmq]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      retries: 15
+    restart: unless-stopped
+
+volumes:
+  tripflow-mysql:
+  tripflow-rabbitmq:
