@@ -151,7 +151,7 @@ jobs:
           }
           json.dump(meta, open(os.path.join(env["OUT"], "meta.json"), "w"), indent=2)
           EOF
-          RESULTS="$OUT" python3 capacity/scripts/report.py > /dev/null
+          RESULTS="$OUT" python3 capacity/scripts/report.py
           cat "$OUT/report.md" >> "$GITHUB_STEP_SUMMARY"
           { echo; echo '## Consistência após a carga'; echo; echo '```'; cat "$OUT/consistency.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
