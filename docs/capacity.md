@@ -14,6 +14,27 @@
 6. **Consistência.** Depois da carga, o teste espera 30 s e confere se a outbox drenou, quantas mensagens a inbox processou e quantas solicitações ficaram em cada status.
 7. **Relatório e critérios.** `capacity/scripts/report.py` gera o relatório no resumo do job e em `results/report.md`. O job reprova se houver OOM no cgroup, contêiner reiniciado, mais de 1% de erros em algum degrau ou evento não publicado na outbox.
 
+## Resultado: TripFlow, 10/11/2026
+
+[Execução no GitHub Actions](https://github.com/acamilateixeira/portfolio-infra/actions/runs/42877175921) com degraus de 120 s, TripFlow em `53cde77`, runner x86 com 4 vCPUs. **Aprovado nos critérios** (sem OOM, sem reinício, 0% de erros, outbox drenada), mas a CPU satura no último degrau.
+
+| Degrau | Req/s | p50 | p95 | p99 | Erros | CPU média (% de 2 CPUs) | Memória pico |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Ociosa | — | — | — | — | — | 8,1% | 722 MiB |
+| 2 it/s | 10 | 20 ms | 29 ms | 70 ms | 0% | 20,3% | 810 MiB |
+| 5 it/s | 25 | 20 ms | 33 ms | 76 ms | 0% | 38,7% | 833 MiB |
+| 10 it/s | 50 | 21 ms | 158 ms | 209 ms | 0% | 71,4% | 874 MiB |
+| 15 it/s | 63 | 2.300 ms | 2.984 ms | 3.161 ms | 0% | 99,9% | 936 MiB |
+
+- **Memória não é o limite.** Pico do kernel (`memory.peak`) de **940 MiB** para a stack inteira, 7,7% do teto de 12 GiB. MySQL é o maior consumidor (476 MiB), seguido de RabbitMQ (158 MiB) e da API (79 MiB).
+- **CPU é o gargalo.** Até 10 it/s (50 req/s) o p95 fica abaixo de 160 ms. A 15 it/s a CPU chega a 100% do teto, o kernel estrangula 178 s de CPU no degrau, o p95 vai a 3 s e o k6 descarta 288 iterações por falta de VUs. A API (FrankenPHP) chega a 160% de um núcleo.
+- **Consistência sob carga:** 3.555 solicitações emitidas, 10.665 eventos publicados pela outbox (3 por fluxo), 7.110 processados pela inbox (os 2 tipos que o consumidor assina) e **0 pendentes** 30 s depois.
+- **Disco:** 309 MB no volume do MySQL depois de 3.555 fluxos completos; 1,25 GB escritos durante a carga.
+
+**O que isso muda na proposta:** memória sobra para Emppo e PulseOps na mesma VM; a CPU de 2 OCPUs é o recurso a dividir. O tráfego esperado de um portfólio fica muito abaixo de 50 req/s, mas a demo pública precisa de rate limit para não deixar um visitante empurrar a VM para o degrau de 15 it/s. O número de CPU vale para x86: repetir na A1 antes de publicar.
+
+**Limitação dos critérios:** o job aprova sem olhar latência. A 15 it/s ele passa com p95 de 3 s. Um critério de p95 por degrau entra quando definirmos a carga-alvo da demo.
+
 ## O que este teste prova e o que não prova
 
 | Prova | Não prova |

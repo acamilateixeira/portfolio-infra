@@ -8,7 +8,7 @@ Infraestrutura dos projetos do portfólio de [Camila Teixeira](https://acamilate
 
 | Item | Situação |
 | --- | --- |
-| [Teste de capacidade](docs/capacity.md) do TripFlow sob o teto da VM Oracle A1 (2 CPUs, 12 GiB) | Implementado; roda no GitHub Actions |
+| [Teste de capacidade](docs/capacity.md) do TripFlow sob o teto da VM Oracle A1 (2 CPUs, 12 GiB) | Implementado e executado: pico de 940 MiB; CPU satura perto de 63 req/s ([resultado](docs/capacity.md#resultado-tripflow-10112026)) |
 | Emppo Finance e PulseOps no mesmo teste | Planejado: entram quando os backends estiverem prontos |
 | Compose de produção (limites, health checks, proxy HTTPS) | Planejado: depende do resultado da capacidade |
 | Backups externos criptografados com restauração testada | Planejado |
