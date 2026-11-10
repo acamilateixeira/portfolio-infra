@@ -64,7 +64,7 @@ function login(email) {
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         tags: { name: 'login' },
     });
-    if (res.status !== 200) fail(`login ${email}: HTTP ${res.status} ${res.body}`);
+    if (res.status !== 200 && res.status !== 201) fail(`login ${email}: HTTP ${res.status} ${res.body}`);
     return res.json('token');
 }
 

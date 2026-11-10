@@ -178,7 +178,7 @@ jobs:
           for stage in report["stages"]:
               if stage["error_rate_pct"] > 1:
                   problems.append(f"{stage['stage']}: {stage['error_rate_pct']}% de erros")
-          pending = next((l.split("=")[1] for l in open(f"{out}/consistency.txt") if l.startswith("outbox_pendente=")), "?")
+          pending = next((l.split("=", 1)[1].strip() for l in open(f"{out}/consistency.txt") if l.startswith("outbox_pendente=")), "?")
           if pending not in ("0", ""):
               problems.append(f"outbox com {pending} evento(s) não publicados 30 s após a carga")
           if os.environ.get("K6_OUTCOME") == "failure":
