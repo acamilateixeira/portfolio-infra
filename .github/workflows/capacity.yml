@@ -65,9 +65,15 @@ jobs:
           mkdir -p "$OUT"
           echo boot > "$OUT/phase"
           nohup bash capacity/scripts/sample.sh > "$OUT/sampler.log" 2>&1 &
-          docker compose up -d --wait --wait-timeout 300
+          # Workers só depois das migrações: o relay consulta a outbox assim que sobe
+          # e entraria em loop de reinício com o banco vazio.
+          docker compose up -d --wait --wait-timeout 300 mysql redis rabbitmq api
           docker compose exec -T api php artisan migrate --force
           docker compose exec -T api php /capacity/seed.php | tee "$OUT/seed.json"
+          docker compose up -d worker outbox-relay consumer
+          sleep 10
+          docker compose ps --format '{{.Service}} {{.State}} {{.Status}}' | tee "$OUT/ps-start.txt"
+          if grep -vq ' running ' "$OUT/ps-start.txt"; then echo "serviço fora do ar logo após subir" >&2; docker compose logs --tail 50; exit 1; fi
           echo "CC_IDS=$(jq -r '.cost_center_ids | join(",")' "$OUT/seed.json")" >> "$GITHUB_ENV"
           curl -fsS http://127.0.0.1:8000/api/health | tee "$OUT/health-before.json"
 
